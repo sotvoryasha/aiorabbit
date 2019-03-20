@@ -1,6 +1,10 @@
+import json
 from enum import Enum
 from typing import Sequence
 from dataclasses import dataclass
+from aioamqp.channel import Channel
+from aioamqp.envelope import Envelope
+from aioamqp.properties import Properties
 
 
 def dict_from_fields_name(obj, fields) -> dict:
@@ -98,5 +102,23 @@ class QueueSettingsFields:
         return dict_from_fields_name(self, self._declaring_fields)
 
 
+@dataclass
+class RMQMessage:
+    channel: Channel
+    body: bytes
+    envelope: Envelope
+    properties: Properties
+
+    async def ack(self):
+        await self.channel.basic_client_ack(self.envelope.delivery_tag)
+
+    async def reject(self):
+        await self.channel.basic_client_nack(self.envelope.delivery_tag, requeue=0)
+
+    def json(self):
+        return json.loads(self.body.decode('utf-8'))
+
+
 RQueues = Sequence[QueueSettingsFields]
 RExchanges = Sequence[ExchangeSettingsFields]
+

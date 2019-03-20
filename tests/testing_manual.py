@@ -1,16 +1,30 @@
 import yaml
 import asyncio
-from rmqclient import RMQClient, Config
+from rmqclient import Consumer, Config, Publisher
+
+
+def callback(message):
+    print(message.json())
+
+
+def read_config_from_yml():
+    with open('simple_topology_rmq.yml') as f:
+        config_dict = yaml.load(f, Loader=yaml.FullLoader)
+    return config_dict
 
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    config = None
-    with open('simple_topology_rmq.yml') as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
+    config = read_config_from_yml()
+
     conf = Config(config)
-    client = RMQClient(**conf.__dict__)
+    consumer = Consumer(**conf.__dict__)
+    publisher = Publisher(**conf.__dict__)
     print(config)
-    loop.run_until_complete(client.run())
-    loop.run_until_complete(client.channel.basic_publish(payload='Hello', exchange_name='test_exchange_fanout1', routing_key='*'))
+    loop.run_until_complete(consumer.run())
+    loop.run_until_complete(publisher.run())
+
+    loop.run_until_complete(consumer.consume_await(callback, 'test_queue2'))
+    for i in range(10):
+        loop.run_until_complete(publisher.send_message({1: i}, 'test_exchange_fanout1', '*'))
     loop.run_forever()
