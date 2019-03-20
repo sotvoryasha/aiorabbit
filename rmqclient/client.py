@@ -1,7 +1,7 @@
 import asyncio
 import aioamqp
 import itertools
-
+import time
 
 from logger import logger
 from rmq_declaring import BindingType, RExchanges, RQueues
@@ -59,6 +59,9 @@ class RMQClient:
         except BaseException as e:
             logger.error(e)
 
+    async def on_error(self):
+        await self.reconnect()
+
     @property
     def connection_data(self):
         return {
@@ -93,26 +96,25 @@ class RMQClient:
 
         """
         reconnect_count = 0
-        while not self.channel and (self.is_infinite_reconnect or self.max_retries > reconnect_count):
+        # TODO: переделать колхоз
+        while True:
             if self.channel is None or not self.channel.is_open:
                 logger.info('Connection to rabbitmq')
 
                 try:
                     await self.connect()
+                    await self.initialize_exchanges_and_queues()
+                    logger.info('Client successfully connected')
+                    reconnect_count = 0
                 except (ConnectionError, OSError, aioamqp.AioamqpException):
+                    self.transport, self.protocol, self.channel = None, None, None
                     logger.warn(f'Try to connect to rabbitmq is failed. '
                                 f'Will retries after {self._reconnect_backoff} seconds')
-
-                self.transport, self.protocol = None, None
-
-                if self.channel is None:
-                    await asyncio.sleep(self._reconnect_backoff)
+                    time.sleep(self._reconnect_backoff)
                     reconnect_count += 1
-                else:
-                    logger.info('Client successfully connected')
-
-        if self.retries_to_notify == reconnect_count:
-            logger.error('Maximum number of retries reached.')
+            await asyncio.sleep(3)
+            if self.retries_to_notify == reconnect_count:
+                logger.error('Maximum number of retries reached.')
 
     async def initialize_exchanges_and_queues(self):
         if self.channel and self.channel.is_open:
@@ -137,5 +139,5 @@ class RMQClient:
                     await self.channel.queue_bind(*bind.as_args)
 
     async def run(self):
-        await self.reconnect()
-        await self.initialize_exchanges_and_queues()
+        loop = asyncio.get_event_loop()
+        await loop.create_task(self.reconnect())
