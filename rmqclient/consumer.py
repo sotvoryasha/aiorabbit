@@ -11,6 +11,7 @@ def sync_to_async(func):
 
 
 class Consumer(RMQClient):
+    instance_type = 'Consumer'
     on_message = None
 
     async def message_creator_callback(self, *args):
@@ -19,11 +20,12 @@ class Consumer(RMQClient):
             result = self.on_message(message)
             if asyncio.iscoroutine(result):
                 await result
-        except:
+            await message.ack()
+        except Exception as e:
             # TODO: sentry
             await message.reject()
 
-    async def consume_await(self, task, queue_name):
+    async def consume(self, task, queue_name, no_ack=False):
         self.on_message = task
-        asyncio.ensure_future(RMQClient.consume_await(self, self.message_creator_callback, queue_name))
+        return asyncio.create_task(RMQClient.consume(self, self.message_creator_callback, queue_name))
 

@@ -1,15 +1,16 @@
-import time
 import asyncio
 import aioamqp
 
 from logger import logger
-from rmq_declaring import RExchanges, RQueues, ExchangeSettingsFields, DataBindingFields, QueueSettingsFields
+from rmq_declaring import RExchanges, RQueues
 
 
 class RMQClient:
+    instance_type = 'Client'
     """
     Класс для описание клиента rabbitMQ
     """
+
     def __init__(self,
                  host: str,
                  port: int,
@@ -54,6 +55,7 @@ class RMQClient:
         -------
 
         """
+
         try:
             self.channel.close()
         except BaseException as e:
@@ -75,6 +77,7 @@ class RMQClient:
         -------
 
         """
+
         return {
             'host': self._host,
             'port': self._port,
@@ -95,8 +98,14 @@ class RMQClient:
             self.transport, self.protocol = await aioamqp.connect(**self.connection_data)
             self.channel = await self.protocol.channel()
         except aioamqp.AioamqpException:
-            logger.warning('RabbitMQ connection error')
+            logger.warning(f'{self.instance_type} RabbitMQ connection error')
             self.transport, self.protocol = None, None
+
+    async def continuous_connection(self):
+        while True:
+            if self.channel is None or not self.channel.is_open:
+                await self.reconnect()
+            await asyncio.sleep(1)
 
     async def reconnect(self):
         """
@@ -106,26 +115,17 @@ class RMQClient:
         -------
 
         """
-        reconnect_count = 0
-        # TODO: переделать колхоз
-        while True:
-            if self.channel is None or not self.channel.is_open:
-                logger.info('Connection to rabbitmq')
 
-                try:
-                    await self.connect()
-                    await self.initialize_exchanges_and_queues()
-                    logger.info('Client successfully connected')
-                    reconnect_count = 0
-                except (ConnectionError, OSError, aioamqp.AioamqpException):
-                    self.transport = self.protocol = self.channel = None
-                    logger.warn(f'Try to connect to rabbitmq is failed. '
-                                f'Will retries after {self._reconnect_backoff} seconds')
-                    time.sleep(self._reconnect_backoff)
-                    reconnect_count += 1
-            await asyncio.sleep(3)
-            if self.retries_to_notify == reconnect_count:
-                logger.error('Maximum number of retries reached.')
+        logger.info('Connection to rabbitmq')
+        try:
+            await self.connect()
+            await self.initialize_exchanges_and_queues()
+            logger.info(f'{self.instance_type} successfully connected')
+        except (ConnectionError, OSError, aioamqp.AioamqpException):
+            self.transport = self.protocol = self.channel = None
+            logger.warn(f'{self.instance_type} Try to connect to rabbitmq is failed. '
+                        f'Will retries after {self._reconnect_backoff} seconds')
+            await asyncio.sleep(self._reconnect_backoff)
 
     async def initialize_exchanges_and_queues(self):
         """
@@ -136,6 +136,7 @@ class RMQClient:
         -------
 
         """
+
         if self.channel and self.channel.is_open:
             for exchange_setting in self.exchanges_settings:
                 exchange = await self.channel.exchange_declare(**exchange_setting.declare_kwargs)
@@ -155,6 +156,7 @@ class RMQClient:
         -------
 
         """
+
         for setting in self.exchanges_settings:
             bindings = setting.binding_data or []
             for bind in bindings:
@@ -170,27 +172,50 @@ class RMQClient:
         Метод для запуска клиента
         пример запуска:
         client = RMQClient(config)
-        asyncio.get_event_loop().run_until_complete(client.run())
+        await client.run()
+
         Returns
         -------
 
         """
+
         self._loop = asyncio.get_event_loop()
-        asyncio.ensure_future(self.reconnect(), loop=self._loop)
+        return asyncio.ensure_future(self.continuous_connection(), loop=self._loop)
 
-    async def publish_await(self, payload, exchange_name, routing_key):
-        while not self.channel:
-            await asyncio.sleep(3)
-        await self.channel.basic_publish(payload=payload, exchange_name=exchange_name, routing_key=routing_key)
+    async def publish(self, payload, exchange_name, routing_key):
+        """
+        Отправка сообщения в exchange
 
-    async def publish_no_await(self, payload, exchange_name, routing_key):
-        asyncio.ensure_future(self.publish_await(payload, exchange_name, routing_key), loop=self._loop)
+        Parameters
+        ----------
+        payload
+        exchange_name
+        routing_key
 
-    async def consume_await(self, callback, queue_name):
+        Returns
+        -------
+
+        """
+
         while not self.channel:
             await asyncio.sleep(1)
-        await self.channel.basic_consume(callback=callback, queue_name=queue_name)
+        await self.channel.basic_publish(payload=payload, exchange_name=exchange_name, routing_key=routing_key)
 
-    async def consume_no_await(self, callback, queue_name, no_ack=True):
-        asyncio.ensure_future(self.consume_await(callback, queue_name, no_ack), loop=self._loop)
+    async def consume(self, callback, queue_name, no_ack=False):
+        """
+        Подписаться на очередь
 
+        Parameters
+        ----------
+        callback
+        queue_name
+        no_ack
+
+        Returns
+        -------
+
+        """
+
+        while not self.channel:
+            await asyncio.sleep(1)
+        await self.channel.basic_consume(callback=callback, queue_name=queue_name, no_ack=no_ack)

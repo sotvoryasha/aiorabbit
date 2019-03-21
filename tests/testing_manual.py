@@ -4,7 +4,11 @@ from rmqclient import Consumer, Config, Publisher
 
 
 def callback(message):
-    print(message.json())
+    print('CALLBACK :', message.json())
+
+
+async def acallback(message):
+    print('ACALLBACK: ', message.json())
 
 
 def read_config_from_yml():
@@ -13,18 +17,22 @@ def read_config_from_yml():
     return config_dict
 
 
+async def main():
+    config = read_config_from_yml()
+    conf = Config(config)
+    consumer1 = Consumer(**conf.__dict__)
+    consumer2 = Consumer(**conf.__dict__)
+    publisher = Publisher(**conf.__dict__)
+    await consumer1.run()
+    await consumer2.run()
+    await publisher.run()
+    await consumer1.consume(callback, 'test_queue1')
+    await consumer2.consume(acallback, 'test_queue2')
+    for i in range(100):
+        await publisher.send_message({1: i}, 'test_exchange_fanout1', '*')
+
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    config = read_config_from_yml()
-
-    conf = Config(config)
-    consumer = Consumer(**conf.__dict__)
-    publisher = Publisher(**conf.__dict__)
-    print(config)
-    loop.run_until_complete(consumer.run())
-    loop.run_until_complete(publisher.run())
-
-    loop.run_until_complete(consumer.consume_await(callback, 'test_queue2'))
-    for i in range(10):
-        loop.run_until_complete(publisher.send_message({1: i}, 'test_exchange_fanout1', '*'))
+    loop.run_until_complete(main())
     loop.run_forever()
+    loop.close()
