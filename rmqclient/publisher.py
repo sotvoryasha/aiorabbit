@@ -5,9 +5,13 @@ from client import RMQClient
 
 
 class Publisher(RMQClient):
+    """
+    Класс который используется для создания клиента который отправляет сообщения
+
+    """
     instance_type = 'Publisher'
 
-    async def send_message(self, payload, exchange, routing_key):
+    async def send_message(self, payload, exchange, routing_key, properties=None):
         if isinstance(payload, dict):
             payload = json.dumps(payload).encode()
         elif not isinstance(payload, bytes):
@@ -17,4 +21,5 @@ class Publisher(RMQClient):
                 logger.error(e)
                 raise ValueError("Can not convert payload to bytes")
 
-        await RMQClient.publish(self, payload, exchange, routing_key)
+        await super(Publisher, self).publish(payload, exchange, routing_key, properties)
+        logger.info('Message successfully sent')

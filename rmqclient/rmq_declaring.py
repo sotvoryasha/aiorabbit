@@ -19,8 +19,9 @@ def dict_from_fields_name(obj, fields) -> dict:
         iterable object of str
     Returns
     -------
-        dict
+    dict
     """
+
     d = {}
     for field in fields:
         if hasattr(obj, field):
@@ -72,7 +73,7 @@ class ExchangeSettingsFields:
     auto_delete: bool = False
     passive: bool = False
     no_wait: bool = False
-    arguments = None
+    arguments: dict = None
     binding_data: DataBindings = None
 
     @property
@@ -94,7 +95,7 @@ class QueueSettingsFields:
     auto_delete: bool = False
     passive: bool = False
     no_wait: bool = False
-    arguments = None
+    arguments: dict = None
     binding_data: DataBindings = None
 
     @property

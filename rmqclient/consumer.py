@@ -1,5 +1,5 @@
 import asyncio
-
+from logger import logger
 from client import RMQClient
 from rmq_declaring import RMQMessage
 
@@ -22,10 +22,10 @@ class Consumer(RMQClient):
                 await result
             await message.ack()
         except Exception as e:
-            # TODO: sentry
+            logger.error(e)
             await message.reject()
 
-    async def consume(self, task, queue_name, no_ack=False):
+    async def consume(self, task, queue_name, no_ack=False, **kwargs):
         self.on_message = task
         return asyncio.create_task(RMQClient.consume(self, self.message_creator_callback, queue_name))
 

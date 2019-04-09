@@ -1,3 +1,4 @@
+import os
 import asyncio
 import aioamqp
 
@@ -47,6 +48,10 @@ class RMQClient:
         self.is_infinite_reconnect = self.max_retries == -1
         self.retries_to_notify = retries_to_notify
 
+    def create_from_env(self):
+        host = os.getenv('RABBIT_HOST')
+        port = os.getenv('RABBIT_PORT')
+
     async def close(self):
         """
         Закрываем клиент корректно.
@@ -92,13 +97,13 @@ class RMQClient:
 
         Returns
         -------
-
+        None
         """
         try:
             self.transport, self.protocol = await aioamqp.connect(**self.connection_data)
             self.channel = await self.protocol.channel()
         except aioamqp.AioamqpException:
-            logger.warning(f'{self.instance_type} RabbitMQ connection error')
+            logger.warning(f'{self.instance_type} RabbitMQ connection error ')
             self.transport, self.protocol = None, None
 
     async def continuous_connection(self):
@@ -134,7 +139,7 @@ class RMQClient:
         ВНИМАНИЕ: если очередь или точка входа существует на сервере RMQ, то переопределить её нельзя
         Returns
         -------
-
+        None
         """
 
         if self.channel and self.channel.is_open:
@@ -182,7 +187,7 @@ class RMQClient:
         self._loop = asyncio.get_event_loop()
         return asyncio.ensure_future(self.continuous_connection(), loop=self._loop)
 
-    async def publish(self, payload, exchange_name, routing_key):
+    async def publish(self, payload, exchange_name, routing_key, properties=None):
         """
         Отправка сообщения в exchange
 
@@ -191,17 +196,21 @@ class RMQClient:
         payload
         exchange_name
         routing_key
+        properties
 
         Returns
         -------
-
+        None
         """
 
         while not self.channel:
             await asyncio.sleep(1)
-        await self.channel.basic_publish(payload=payload, exchange_name=exchange_name, routing_key=routing_key)
+        await self.channel.basic_publish(payload=payload,
+                                         exchange_name=exchange_name,
+                                         routing_key=routing_key,
+                                         properties=properties)
 
-    async def consume(self, callback, queue_name, no_ack=False):
+    async def consume(self, callback, queue_name, no_ack=False, **kwargs):
         """
         Подписаться на очередь
 
@@ -210,12 +219,13 @@ class RMQClient:
         callback
         queue_name
         no_ack
+        kwargs
 
         Returns
         -------
-
+        None
         """
 
         while not self.channel:
             await asyncio.sleep(1)
-        await self.channel.basic_consume(callback=callback, queue_name=queue_name, no_ack=no_ack)
+        await self.channel.basic_consume(callback=callback, queue_name=queue_name, no_ack=no_ack, **kwargs)

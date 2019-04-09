@@ -1,34 +1,56 @@
 import os
+import json
+
 
 from rmq_declaring import RExchanges, RQueues, DataBindingFields, ExchangeSettingsFields, QueueSettingsFields, \
     BindingType
 
 
 class Config:
-    host: str = '127.0.0.1'
+    host: str = 'rabbitmq'
     port: int = 5672
     login: str = 'guest'
     password: str = 'guest'
-    virtualhost: str = ''
+    virtualhost: str = '/'
     queues_settings: RQueues = None
     exchanges_settings: RExchanges = None
 
-    def __init__(self, config_topology: dict):
-        credential_dict = get_credential_from_env()
-        self.host = credential_dict.get('host')
-        self.port = credential_dict.get('port')
-        self.login = credential_dict.get('login')
-        self.password = credential_dict.get('password')
-        self.virtualhost = credential_dict.get('virtualhost')
+    def __init__(self, host=None, port=None, login=None, password=None, virtualhost=None, config_topology=None):
+        if not config_topology:
+            raise ValueError('Empty config_topology')
+
+        self.host = host or Config.host
+        self.port = port or Config.port
+        self.login = login or Config.password
+        self.password = password or Config.password
+        self.virtualhost = virtualhost or Config.virtualhost
 
         if not config_topology.get('exchanges') or not config_topology.get('queues'):
             raise ValueError('Exchanges and Queues is not set.')
 
-        self.exchanges_settings = convert_exchanges_from_config(config_topology.get('exchanges'))
         self.queues_settings = convert_queues_from_config(config_topology.get('queues'))
+        self.exchanges_settings = convert_exchanges_from_config(config_topology.get('exchanges'))
+
+    @classmethod
+    def create_from_env(cls):
+        """
+        Создаёт Config из переменных окружения
+
+        Returns
+        -------
+        Config
+        """
+        credential_dict = get_credential_from_env()
+        host = credential_dict.get('host')
+        port = credential_dict.get('port')
+        login = credential_dict.get('login')
+        password = credential_dict.get('password')
+        virtualhost = credential_dict.get('virtualhost')
+        config_topology = json.loads(credential_dict.get('topology'))
+        return cls(host, port, login, password, virtualhost, config_topology)
 
 
-def convert_binding_data(setting, entity_type='queue'):
+def convert_binding_data(setting, entity_type='queue')-> list or None:
     """
     Конвертирует параметры для биндинга
     Parameters
@@ -39,26 +61,23 @@ def convert_binding_data(setting, entity_type='queue'):
         str: exchange or queue
     Returns
     -------
-
+    list or None
     """
 
     converted_data = None
     bindings = setting.pop('binding_data', [])
     if entity_type == 'exchange':
-        converted_data = [DataBindingFields(**bind,
-                                            destination=setting.get('exchange_name'),
-                                            binding_type=BindingType.EE)
-                          for bind in bindings]
+        converted_data = [DataBindingFields(**b, destination=setting.get('exchange_name'), binding_type=BindingType.EE)
+                          for b in bindings]
+
     if entity_type == 'queue':
-        converted_data = [DataBindingFields(**bind,
-                                            destination=setting.get('queue_name'),
-                                            binding_type=BindingType.EQ)
-                          for bind in bindings]
+        converted_data = [DataBindingFields(**b, destination=setting.get('queue_name'), binding_type=BindingType.EQ)
+                          for b in bindings]
 
     return converted_data
 
 
-def convert_exchanges_from_config(exchanges_configs: dict):
+def convert_exchanges_from_config(exchanges_configs: dict)->list:
     """
     Функция для конвертирования конфига в сущности rmq_declaring
 
@@ -86,7 +105,7 @@ def convert_exchanges_from_config(exchanges_configs: dict):
 
     Returns
     -------
-    Config
+    list
 
     """
 
@@ -98,7 +117,7 @@ def convert_exchanges_from_config(exchanges_configs: dict):
     return exchanges
 
 
-def convert_queues_from_config(queues_configs):
+def convert_queues_from_config(queues_configs: dict)->list:
     """
 
     Parameters
@@ -147,8 +166,9 @@ def get_credential_from_env()->dict:
 
     """
 
-    return {'host': os.getenv('host', '127.0.0.1'),
-            'port': os.getenv('port', 5672),
-            'login': os.getenv('login', 'guest'),
-            'password': os.getenv('password', 'guest'),
-            'virtualhost': os.getenv('virtualhost', '/')}
+    return {'host': os.getenv('RMQ_HOST', ''),
+            'port': os.getenv('RMQ_PORT', None),
+            'login': os.getenv('RMQ_LOGIN', ''),
+            'password': os.getenv('RMQ_PASSWORD', ''),
+            'virtualhost': os.getenv('RMQ_VHOST', '/'),
+            'topology': os.getenv('RMQ_TOPOLOGY', {})}

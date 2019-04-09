@@ -1,0 +1,4 @@
+--extra-index-url https://nexus.local.playrix.com/repository/playrix-pypi/simple
+aioamqp==0.12.0
+ci-logger==0.2.2
+PyYaml==5.1

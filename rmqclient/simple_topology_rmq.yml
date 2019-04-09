@@ -5,10 +5,14 @@ exchanges:
     type_name: direct
 queues:
   - queue_name: test_queue1
+    arguments:
+      x-queue-mode: lazy
     binding_data:
       - source: test_exchange_fanout1
         routing_key: test_queue1
   - queue_name: test_queue2
+    arguments:
+      x-queue-mode: lazy
     binding_data:
       - source: test_exchange_direct1
         routing_key: info

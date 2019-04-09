@@ -1,6 +1,10 @@
+import os
 import yaml
+import json
 import asyncio
-from rmqclient import Consumer, Config, Publisher
+
+from utils import Config
+from publisher import Publisher
 
 
 def callback(message):
@@ -18,17 +22,17 @@ def read_config_from_yml():
 
 
 async def main():
-    config = read_config_from_yml()
-    conf = Config(config)
-    consumer1 = Consumer(**conf.__dict__)
-    consumer2 = Consumer(**conf.__dict__)
+    os.environ['RMQ_TOPOLOGY'] = json.dumps(read_config_from_yml())
+    conf = Config.create_from_env()
+    # consumer1 = Consumer(**conf.__dict__)
+    # consumer2 = Consumer(**conf.__dict__)
     publisher = Publisher(**conf.__dict__)
-    await consumer1.run()
-    await consumer2.run()
+    # await consumer1.run()
+    # await consumer2.run()
     await publisher.run()
-    await consumer1.consume(callback, 'test_queue1')
-    await consumer2.consume(acallback, 'test_queue2')
-    for i in range(100):
+    # await consumer1.consume(callback, 'test_queue1')
+    # await consumer2.consume(acallback, 'test_queue2')
+    for i in range(100000):
         await publisher.send_message({1: i}, 'test_exchange_fanout1', '*')
 
 if __name__ == '__main__':
