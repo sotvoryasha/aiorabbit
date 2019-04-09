@@ -7,7 +7,7 @@ from rmq_declaring import RExchanges, RQueues, DataBindingFields, ExchangeSettin
 
 
 class Config:
-    host: str = 'rabbitmq'
+    host: str = 'localhost'
     port: int = 5672
     login: str = 'guest'
     password: str = 'guest'
