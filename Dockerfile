@@ -1,4 +1,4 @@
-FROM python37
+FROM 675869518239.dkr.ecr.eu-central-1.amazonaws.com/ci-python37:latest
 
 
 COPY requirements.txt /tmp/requirements.txt
